@@ -37,7 +37,7 @@ async function fetchProfile(token) {
 }
 
 function doGoogleRedirect() {
-  if (GOOGLE_CLIENT_ID === "253401165308-q00hl4ungj7gsf5nt1iklh0mvs4v73a8.apps.googleusercontent.com") {
+  if (GOOGLE_CLIENT_ID === "YOUR_GOOGLE_CLIENT_ID_HERE") {
     alert("⚠️ Paste your Google OAuth Client ID in the GOOGLE_CLIENT_ID constant at the top of the file.\n\nGet it free from: https://console.cloud.google.com/apis/credentials");
     return;
   }
