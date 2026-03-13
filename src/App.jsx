@@ -3,16 +3,52 @@ import { useState, useEffect } from "react";
 const GOOGLE_CLIENT_ID = "253401165308-q00hl4ungj7gsf5nt1iklh0mvs4v73a8.apps.googleusercontent.com";
 
 const SIZES = [
-  { label:"1:1",  w:1024, h:1024, use:"Instagram Square", api:"1:1"  },
-  { label:"4:5",  w:896,  h:1120, use:"Instagram Feed",   api:"4:5"  },
-  { label:"9:16", w:768,  h:1344, use:"Stories / Reels",  api:"9:16" },
-  { label:"16:9", w:1344, h:768,  use:"YouTube/LinkedIn", api:"16:9" },
-  { label:"3:4",  w:864,  h:1152, use:"Portrait Print",   api:"3:4"  },
-  { label:"4:3",  w:1152, h:864,  use:"Presentation",     api:"4:3"  },
+  { label:"1:1",  w:1024, h:1024, use:"Instagram Square" },
+  { label:"4:5",  w:896,  h:1120, use:"Instagram Feed"   },
+  { label:"9:16", w:768,  h:1344, use:"Stories / Reels"  },
+  { label:"16:9", w:1344, h:768,  use:"YouTube/LinkedIn" },
+  { label:"3:4",  w:864,  h:1152, use:"Portrait Print"   },
+  { label:"4:3",  w:1152, h:864,  use:"Presentation"     },
+];
+
+const MODELS = [
+  { id:"flux",        name:"FLUX",          desc:"Best quality, photorealistic",  color:"#F9AB00" },
+  { id:"flux-realism",name:"FLUX Realism",  desc:"Enhanced realism filter",       color:"#34A853" },
+  { id:"turbo",       name:"FLUX Turbo",    desc:"Fastest generation ~3s",        color:"#4285F4" },
 ];
 
 const STYLES = ["Cinematic","Photorealistic","Luxury Editorial","Architectural Viz","Lifestyle","Product Shot","Golden Hour","Minimal Clean"];
 
+// ── Pollinations.ai — free, no key, no billing ─────────────
+async function generateImage(prompt, negPrompt, style, modelId, width, height) {
+  const full = `${style} style. ${prompt}. Ultra high quality, detailed, sharp focus, professional photography.`;
+  const neg  = negPrompt || "blurry, low quality, watermark, text, ugly, deformed, AI artifacts";
+
+  const params = new URLSearchParams({
+    width:   String(width),
+    height:  String(height),
+    model:   modelId,
+    negative_prompt: neg,
+    nologo:  "true",
+    enhance: "true",
+    seed:    String(Math.floor(Math.random() * 999999)),
+  });
+
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(full)}?${params}`;
+
+  // Pollinations returns the image directly — convert to base64 for history storage
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Generation failed (${res.status})`);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+// ── Auth ───────────────────────────────────────────────────
 function parseToken() {
   const p = new URLSearchParams(window.location.hash.substring(1));
   return p.get("access_token") || null;
@@ -31,40 +67,15 @@ function doGoogleRedirect() {
   window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${p}`;
 }
 
-// ── Calls the Vercel proxy → Imagen 3 Fast ─────────────────
-async function generateImage(apiKey, prompt, style, negPrompt, aspectRatio) {
-  const fullPrompt = prompt;
-  const res = await fetch("/api/generate", {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ style,
-      prompt: fullPrompt,
-      negPrompt,
-      aspectRatio,
-      apiKey,          // forwarded to proxy; proxy uses GEMINI_API_KEY env var as fallback
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok || data.error) {
-    const msg = data.error || "Generation failed";
-    if (msg.includes("quota") || msg.includes("QUOTA")) throw new Error("Quota exceeded — wait 1 min (free: 15/min, 1500/day)");
-    if (msg.includes("API_KEY") || msg.includes("key not valid")) throw new Error("Invalid API key — check aistudio.google.com");
-    if (msg.includes("billing")) throw new Error("Billing required for this model — switch to free tier Imagen 3 Fast");
-    throw new Error(msg);
-  }
-  return data.image;
-}
-
 export default function App() {
   const [user,       setUser]       = useState(null);
   const [appReady,   setAppReady]   = useState(false);
   const [signingIn,  setSigningIn]  = useState(false);
-  const [apiKey,     setApiKey]     = useState(() => { try { return localStorage.getItem("nb_gemini_key")||""; } catch { return ""; } });
-  const [showKey,    setShowKey]    = useState(false);
+  const [model,      setModel]      = useState("flux");
   const [size,       setSize]       = useState("1:1");
   const [style,      setStyle]      = useState("Cinematic");
   const [prompt,     setPrompt]     = useState("");
-  const [negPrompt,  setNegPrompt]  = useState("AI artifacts, plastic skin, oversaturation, watermark, blurry");
+  const [negPrompt,  setNegPrompt]  = useState("AI artifacts, plastic skin, oversaturation, watermark, blurry, deformed");
   const [generating, setGenerating] = useState(false);
   const [imgSrc,     setImgSrc]     = useState(null);
   const [error,      setError]      = useState(null);
@@ -84,28 +95,30 @@ export default function App() {
     } else { setAppReady(true); }
   }, []);
 
-  const saveKey = k => { setApiKey(k); try { localStorage.setItem("nb_gemini_key",k); } catch {} };
-
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
-    if (!apiKey.trim()) { setError("Paste your free Gemini API key — aistudio.google.com/app/apikey"); return; }
     setGenerating(true); setError(null); setImgSrc(null);
     const cs = SIZES.find(s=>s.label===size);
     try {
-      const src = await generateImage(apiKey, prompt, style, negPrompt, cs.api);
+      const src = await generateImage(prompt, negPrompt, style, model, cs.w, cs.h);
       setImgSrc(src);
-      setHistory(prev=>[{ id:Date.now(), prompt:prompt.slice(0,60)+(prompt.length>60?"...":""), size, style, src, time:new Date().toLocaleTimeString() }, ...prev.slice(0,15)]);
+      const cm = MODELS.find(m2=>m2.id===model);
+      setHistory(prev=>[{
+        id:Date.now(), prompt:prompt.slice(0,60)+(prompt.length>60?"...":""),
+        model:cm.name, size, style, src, time:new Date().toLocaleTimeString()
+      }, ...prev.slice(0,15)]);
     } catch(e) { setError(e.message); }
-    finally { setGenerating(false); }
+    finally   { setGenerating(false); }
   };
 
   const handleDownload = () => {
     if (!imgSrc) return;
-    const a = document.createElement("a"); a.href=imgSrc; a.download=`nanaban-${Date.now()}.png`; a.click();
+    const a=document.createElement("a"); a.href=imgSrc; a.download=`nanaban-${Date.now()}.png`; a.click();
   };
 
   const cs = SIZES.find(s=>s.label===size);
-  const maxD=460, sc=Math.min(maxD/cs.w,maxD/cs.h);
+  const cm = MODELS.find(m2=>m2.id===model);
+  const maxD=460, sc=Math.min(maxD/cs.w, maxD/cs.h);
   const dw=Math.round(cs.w*sc), dh=Math.round(cs.h*sc);
 
   const CSS = `
@@ -117,7 +130,7 @@ export default function App() {
     @keyframes cardIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:none}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
     @keyframes imgIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
-    @keyframes progbar{from{width:0%}to{width:88%}}
+    @keyframes progbar{from{width:0%}to{width:92%}}
     .orb{position:absolute;border-radius:50%;pointer-events:none;}
     .card{position:relative;z-index:10;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:24px;padding:46px 42px;width:440px;backdrop-filter:blur(20px);box-shadow:0 28px 72px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.08);animation:cardIn .7s cubic-bezier(.16,1,.3,1) both;font-family:'DM Sans',sans-serif;}
     .gbtn{width:100%;padding:14px;background:#fff;border:none;border-radius:13px;display:flex;align-items:center;justify-content:center;gap:11px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;color:#1a1a1a;cursor:pointer;transition:all .2s;box-shadow:0 4px 14px rgba(0,0,0,.3);}
@@ -136,15 +149,11 @@ export default function App() {
     .signout:hover{color:rgba(255,255,255,.6);}
     .lpanel{width:355px;min-width:355px;background:rgba(255,255,255,.015);border-right:1px solid rgba(255,255,255,.05);overflow-y:auto;padding:18px 16px;display:flex;flex-direction:column;gap:16px;}
     .slbl{font-size:10px;font-weight:600;color:rgba(255,255,255,.28);letter-spacing:1px;text-transform:uppercase;margin-bottom:7px;}
-    .key-wrap{background:rgba(66,133,244,.06);border:1px solid rgba(66,133,244,.14);border-radius:12px;padding:12px;}
-    .key-row{display:flex;gap:7px;margin-top:8px;}
-    .keyinput{flex:1;background:rgba(0,0,0,.3);border:1.5px solid rgba(255,255,255,.08);border-radius:9px;padding:9px 11px;color:#fff;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;transition:border-color .2s;}
-    .keyinput::placeholder{color:rgba(255,255,255,.2);}
-    .keyinput:focus{border-color:rgba(66,133,244,.4);}
-    .tog{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.4);border-radius:7px;padding:6px 10px;cursor:pointer;font-size:11px;font-family:'DM Sans',sans-serif;white-space:nowrap;transition:all .2s;}
-    .tog:hover{color:rgba(255,255,255,.7);}
+    .mcard{border-radius:12px;padding:11px 13px;cursor:pointer;transition:all .2s;border:1.5px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);display:flex;align-items:center;gap:11px;margin-bottom:6px;}
+    .mcard:hover{border-color:rgba(255,255,255,.11);}
+    .mcard.sel{border-color:var(--mc);}
     .szgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
-    .szbtn{border-radius:10px;padding:8px 4px;cursor:pointer;transition:all .18s;border:1.5px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;}
+    .szbtn{border-radius:10px;padding:8px 4px;cursor:pointer;transition:all .18s;border:1.5px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);display:flex;flex-direction:column;align-items:center;gap:3px;}
     .szbtn:hover{border-color:rgba(255,255,255,.11);}
     .szbtn.on{border-color:#F9AB00;background:rgba(249,171,0,.07);}
     .schips{display:flex;flex-wrap:wrap;gap:6px;}
@@ -154,23 +163,22 @@ export default function App() {
     .ptxt{width:100%;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.07);border-radius:11px;padding:11px;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;resize:none;outline:none;transition:border-color .2s;line-height:1.6;}
     .ptxt::placeholder{color:rgba(255,255,255,.2);}
     .ptxt:focus{border-color:rgba(249,171,0,.35);}
+    .free-badge{background:rgba(52,168,83,.08);border:1px solid rgba(52,168,83,.2);border-radius:10px;padding:10px 13px;font-size:12px;color:rgba(52,168,83,.9);font-family:'DM Sans',sans-serif;line-height:1.6;}
     .ebox{background:rgba(234,67,53,.07);border:1px solid rgba(234,67,53,.22);border-radius:10px;padding:11px 13px;font-size:12px;color:#f28b82;font-family:'DM Sans',sans-serif;line-height:1.5;animation:fadeUp .3s ease;}
-    .ibox{background:rgba(66,133,244,.07);border:1px solid rgba(66,133,244,.18);border-radius:10px;padding:10px 13px;font-size:12px;color:rgba(66,133,244,.9);font-family:'DM Sans',sans-serif;line-height:1.5;}
-    .ilink{color:#4285F4;text-decoration:none;border-bottom:1px solid rgba(66,133,244,.3);}
-    .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:600;}
+    .badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:600;}
     .genbtn{width:100%;padding:14px;border-radius:13px;border:none;cursor:pointer;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;transition:all .22s;display:flex;align-items:center;justify-content:center;gap:9px;}
     .genbtn.idle{background:linear-gradient(135deg,#F9AB00,#E37400);color:#000;box-shadow:0 7px 22px rgba(249,171,0,.24);}
     .genbtn.idle:hover{transform:translateY(-2px);box-shadow:0 11px 30px rgba(249,171,0,.36);}
-    .genbtn.busy{background:rgba(249,171,0,.08);color:#F9AB00;border:1.5px solid rgba(249,171,0,.2);box-shadow:none;cursor:not-allowed;}
+    .genbtn.busy{background:rgba(249,171,0,.08);color:#F9AB00;border:1.5px solid rgba(249,171,0,.2);cursor:not-allowed;}
     .genbtn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
     .spin{width:18px;height:18px;border:2px solid rgba(249,171,0,.18);border-top-color:#F9AB00;border-radius:50%;animation:spin .7s linear infinite;}
     .canvas{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;}
-    .imgbox{border-radius:16px;overflow:hidden;position:relative;background:rgba(255,255,255,.02);border:1.5px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;transition:all .3s;}
+    .imgbox{border-radius:16px;overflow:hidden;position:relative;background:rgba(255,255,255,.02);border:1.5px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;}
     .genimg{width:100%;height:100%;object-fit:contain;display:block;animation:imgIn .5s ease;}
     .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(7,8,10,.78);backdrop-filter:blur(6px);border-radius:16px;}
     .big-spin{width:44px;height:44px;border:3px solid rgba(249,171,0,.15);border-top-color:#F9AB00;border-radius:50%;animation:spin .85s linear infinite;}
     .prog{width:140px;height:3px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;margin-top:16px;}
-    .prog-bar{height:100%;background:linear-gradient(90deg,#F9AB00,#34A853);border-radius:99px;animation:progbar 20s ease-out forwards;}
+    .prog-bar{height:100%;background:linear-gradient(90deg,#F9AB00,#34A853);border-radius:99px;animation:progbar 25s ease-out forwards;}
     .metabar{padding:12px 22px;border-top:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.01);}
     .mkey{font-size:9px;color:rgba(255,255,255,.24);letter-spacing:.5px;text-transform:uppercase;}
     .mval{font-size:12px;color:rgba(255,255,255,.58);font-weight:500;margin-top:2px;}
@@ -193,27 +201,33 @@ export default function App() {
     </div>
   );
 
+  // ── LOGIN ──────────────────────────────────────────────────
   if (!user) return (
     <div style={{minHeight:"100vh",background:"#060608",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
       <style>{CSS}</style>
       <div className="orb" style={{width:580,height:580,top:-180,left:-180,background:"radial-gradient(circle,rgba(249,171,0,.11) 0%,transparent 70%)",animation:"pulse 6s ease-in-out infinite"}}/>
       <div className="orb" style={{width:480,height:480,bottom:-140,right:-140,background:"radial-gradient(circle,rgba(52,168,83,.09) 0%,transparent 70%)",animation:"pulse 8s ease-in-out infinite reverse"}}/>
       <div className="card">
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:32}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:28}}>
           <div className="logo-mark">🍌</div>
           <div>
             <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:"#fff",letterSpacing:"-0.5px"}}>NanaBan Studio</div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,.33)",marginTop:1}}>Powered by Google Imagen 3 Fast</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,.33)",marginTop:1}}>Powered by FLUX · No API key needed</div>
           </div>
         </div>
         <div style={{display:"flex",gap:7,marginBottom:22,flexWrap:"wrap"}}>
-          <span className="badge" style={{background:"rgba(52,168,83,.1)",color:"#34A853",border:"1px solid rgba(52,168,83,.2)"}}>✓ Free tier</span>
-          <span className="badge" style={{background:"rgba(249,171,0,.1)",color:"#F9AB00",border:"1px solid rgba(249,171,0,.2)"}}>15 req/min</span>
-          <span className="badge" style={{background:"rgba(66,133,244,.1)",color:"#4285F4",border:"1px solid rgba(66,133,244,.2)"}}>1500/day</span>
-          <span className="badge" style={{background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.5)",border:"1px solid rgba(255,255,255,.08)"}}>No billing required</span>
+          {[["✓ Free forever","rgba(52,168,83,.1)","#34A853","rgba(52,168,83,.2)"],
+            ["No API key","rgba(249,171,0,.1)","#F9AB00","rgba(249,171,0,.2)"],
+            ["No billing","rgba(66,133,244,.1)","#4285F4","rgba(66,133,244,.2)"],
+            ["Unlimited","rgba(255,255,255,.05)","rgba(255,255,255,.5)","rgba(255,255,255,.08)"],
+          ].map(([lbl,bg,color,border])=>(
+            <span key={lbl} className="badge" style={{background:bg,color,border:`1px solid ${border}`}}>{lbl}</span>
+          ))}
         </div>
         <div style={{fontFamily:"'Syne',sans-serif",fontSize:25,fontWeight:800,color:"#fff",lineHeight:1.22,marginBottom:10,letterSpacing:"-0.6px"}}>Real images. Zero cost.</div>
-        <div style={{fontSize:14,color:"rgba(255,255,255,.38)",marginBottom:28,lineHeight:1.65}}>Sign in with Google, then add your free Gemini API key. Imagen 3 Fast runs via a secure server proxy — no CORS, no billing required.</div>
+        <div style={{fontSize:14,color:"rgba(255,255,255,.38)",marginBottom:28,lineHeight:1.65}}>
+          Sign in with Google and start generating immediately. Powered by FLUX via Pollinations.ai — completely free, no API key required.
+        </div>
         <button className="gbtn" onClick={()=>{setSigningIn(true);doGoogleRedirect();}} disabled={signingIn}>
           {signingIn?(<><div className="gspin"/>Redirecting...</>):(
             <><svg width="20" height="20" viewBox="0 0 24 24">
@@ -224,14 +238,11 @@ export default function App() {
             </svg>Continue with Google</>
           )}
         </button>
-        <div className="ibox" style={{marginTop:16}}>
-          <strong>Step 2 after login:</strong> Get free Gemini API key →{" "}
-          <a className="ilink" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">aistudio.google.com/app/apikey</a>
-        </div>
       </div>
     </div>
   );
 
+  // ── MAIN APP ───────────────────────────────────────────────
   return (
     <div style={{minHeight:"100vh",background:"#07080A",fontFamily:"'DM Sans',sans-serif",display:"flex",flexDirection:"column"}}>
       <style>{CSS}</style>
@@ -239,7 +250,7 @@ export default function App() {
         <div style={{display:"flex",alignItems:"center",gap:9}}>
           <div className="logo-mark">🍌</div>
           <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:"#fff",letterSpacing:"-0.3px"}}>NanaBan Studio</div>
-          <span className="badge" style={{background:"rgba(52,168,83,.1)",color:"#34A853",border:"1px solid rgba(52,168,83,.18)",marginLeft:4}}>Imagen 3 Fast</span>
+          <span className="badge" style={{background:"rgba(52,168,83,.1)",color:"#34A853",border:"1px solid rgba(52,168,83,.18)",marginLeft:4}}>FLUX Free</span>
         </div>
         <div className="ntabs">
           {[["generate","✦ Generate"],["history","◌ History"]].map(([id,lbl])=>(
@@ -258,59 +269,68 @@ export default function App() {
         </div>
       </nav>
 
-      {tab==="history"?(
+      {tab==="history" ? (
         <div className="hpanel">
           <div style={{marginBottom:18}}>
             <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,color:"#fff",letterSpacing:"-0.4px"}}>Generation History</div>
             <div style={{fontSize:13,color:"rgba(255,255,255,.28)",marginTop:4}}>{history.length} images this session</div>
           </div>
-          {history.length===0?(
+          {history.length===0 ? (
             <div style={{textAlign:"center",padding:"72px 40px",color:"rgba(255,255,255,.22)"}}>
               <div style={{fontSize:40,marginBottom:14,opacity:.35}}>🍌</div>
               <div style={{fontSize:14}}>No generations yet</div>
             </div>
-          ):(
+          ) : (
             <div className="hgrid">
               {history.map(h=>(
                 <div key={h.id} className="hcard" onClick={()=>{setTab("generate");setPrompt(h.prompt);}}>
                   <img src={h.src} alt={h.prompt}/>
                   <div className="hcard-body">
                     <div style={{fontSize:11,color:"rgba(255,255,255,.55)",marginBottom:4,lineHeight:1.4}}>{h.prompt}</div>
-                    <div style={{fontSize:10,color:"rgba(255,255,255,.26)"}}>{h.size} · {h.style} · {h.time}</div>
+                    <div style={{fontSize:10,color:"rgba(255,255,255,.26)"}}>{h.model} · {h.size} · {h.time}</div>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-      ):(
+      ) : (
         <div style={{display:"flex",flex:1,overflow:"hidden"}}>
           <div className="lpanel">
-            <div className="key-wrap">
-              <div className="slbl" style={{marginBottom:4}}>Gemini API Key</div>
-              <div style={{fontSize:11,color:"rgba(255,255,255,.38)",lineHeight:1.5}}>
-                {apiKey
-                  ?<span style={{color:"#34A853"}}>✓ Key saved — Imagen 3 Fast ready</span>
-                  :<>Free key → <a className="ilink" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">aistudio.google.com/app/apikey</a></>}
-              </div>
-              <div className="key-row">
-                <input className="keyinput" type={showKey?"text":"password"} placeholder="AIzaSy..." value={apiKey} onChange={e=>saveKey(e.target.value)}/>
-                <button className="tog" onClick={()=>setShowKey(!showKey)}>{showKey?"Hide":"Show"}</button>
-              </div>
+
+            <div className="free-badge">
+              ✓ <strong>100% Free</strong> — powered by FLUX via Pollinations.ai. No API key, no billing, unlimited generations.
             </div>
 
+            {/* Model */}
+            <div>
+              <div className="slbl">Model</div>
+              {MODELS.map(m2=>(
+                <div key={m2.id} className={`mcard ${model===m2.id?"sel":""}`} style={{"--mc":m2.color}} onClick={()=>setModel(m2.id)}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:m2.color,boxShadow:`0 0 6px ${m2.color}`,flexShrink:0}}/>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{m2.name}</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,.35)",marginTop:1}}>{m2.desc}</div>
+                  </div>
+                  {model===m2.id && <div style={{width:16,height:16,borderRadius:"50%",background:m2.color,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#000",fontSize:9,fontWeight:800}}>✓</span></div>}
+                </div>
+              ))}
+            </div>
+
+            {/* Size */}
             <div>
               <div className="slbl">Aspect Ratio</div>
               <div className="szgrid">
                 {SIZES.map(s=>(
                   <div key={s.label} className={`szbtn ${size===s.label?"on":""}`} onClick={()=>setSize(s.label)}>
                     <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:11,color:"#fff"}}>{s.label}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,.3)",lineHeight:1.2,textAlign:"center"}}>{s.use}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,.3)",lineHeight:1.3,textAlign:"center"}}>{s.use}</div>
                   </div>
                 ))}
               </div>
             </div>
 
+            {/* Style */}
             <div>
               <div className="slbl">Style Preset</div>
               <div className="schips">
@@ -318,57 +338,59 @@ export default function App() {
               </div>
             </div>
 
+            {/* Prompts */}
             <div>
               <div className="slbl">Prompt</div>
-              <textarea className="ptxt" rows={5} placeholder="Describe your image — scene, lighting, mood, subjects, location..." value={prompt} onChange={e=>setPrompt(e.target.value)}/>
+              <textarea className="ptxt" rows={5}
+                placeholder="Describe your image — scene, lighting, mood, subjects, location..."
+                value={prompt} onChange={e=>setPrompt(e.target.value)}/>
             </div>
             <div>
               <div className="slbl">Negative Prompt</div>
               <textarea className="ptxt" rows={2} value={negPrompt} onChange={e=>setNegPrompt(e.target.value)}/>
             </div>
 
-            {error&&<div className="ebox">⚠ {error}</div>}
+            {error && <div className="ebox">⚠ {error}</div>}
 
             <button className={`genbtn ${generating?"busy":"idle"}`} onClick={handleGenerate} disabled={generating||!prompt.trim()}>
-              {generating?<><div className="spin"/>Generating via Imagen 3...</>:<>✦ Generate Image</>}
+              {generating ? <><div className="spin"/>Generating with {cm.name}...</> : <>✦ Generate Image</>}
             </button>
           </div>
 
+          {/* Canvas */}
           <div style={{flex:1,display:"flex",flexDirection:"column"}}>
             <div className="canvas">
               <div className="imgbox" style={{width:dw,height:dh}}>
-                {imgSrc&&<img className="genimg" src={imgSrc} alt="Generated"/>}
-                {generating&&(
+                {imgSrc && <img className="genimg" src={imgSrc} alt="Generated"/>}
+                {generating && (
                   <div className="overlay">
                     <div className="big-spin"/>
                     <div className="prog"><div className="prog-bar"/></div>
-                    <div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:10,fontFamily:"'DM Sans',sans-serif"}}>Imagen 3 Fast generating...</div>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,.22)",marginTop:4,fontFamily:"'DM Sans',sans-serif"}}>~10–15 seconds</div>
+                    <div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:10,fontFamily:"'DM Sans',sans-serif"}}>{cm.name} generating...</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,.22)",marginTop:4,fontFamily:"'DM Sans',sans-serif"}}>~10–20 seconds</div>
                   </div>
                 )}
-                {!imgSrc&&!generating&&(
+                {!imgSrc && !generating && (
                   <div style={{textAlign:"center",padding:32}}>
                     <div style={{fontSize:40,opacity:.2,marginBottom:12}}>🍌</div>
                     <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:12,color:"rgba(255,255,255,.22)",marginBottom:7}}>{size} · {cs.w}×{cs.h}px</div>
-                    <div style={{fontSize:13,color:"rgba(255,255,255,.18)",lineHeight:1.7}}>
-                      {apiKey?"Enter a prompt and hit Generate":"Add your Gemini API key to start"}
-                    </div>
+                    <div style={{fontSize:13,color:"rgba(255,255,255,.18)",lineHeight:1.7}}>Enter a prompt and hit Generate</div>
                   </div>
                 )}
               </div>
             </div>
             <div className="metabar">
               <div style={{display:"flex",gap:20}}>
-                {[["Model","Imagen 3 Fast"],["Size",`${cs.label} · ${cs.w}×${cs.h}`],["Style",style],["API",apiKey?"Connected ✓":"Not set ✗"]].map(([k,v])=>(
+                {[["Model",cm.name],["Size",`${cs.label} · ${cs.w}×${cs.h}`],["Style",style],["Engine","Pollinations.ai ✓"]].map(([k,v])=>(
                   <div key={k}>
                     <div className="mkey">{k}</div>
-                    <div className="mval" style={{color:k==="API"?(apiKey?"#34A853":"#EA4335"):undefined}}>{v}</div>
+                    <div className="mval" style={{color:k==="Engine"?"#34A853":undefined}}>{v}</div>
                   </div>
                 ))}
               </div>
               <div style={{display:"flex",gap:7}}>
-                {imgSrc&&<button className="abtn p" onClick={handleDownload}>⬇ Download</button>}
-                {imgSrc&&<button className="abtn s" onClick={()=>{setImgSrc(null);setError(null);setPrompt("");}}>+ New</button>}
+                {imgSrc && <button className="abtn p" onClick={handleDownload}>⬇ Download</button>}
+                {imgSrc && <button className="abtn s" onClick={()=>{setImgSrc(null);setError(null);setPrompt("");}}>+ New</button>}
               </div>
             </div>
           </div>
