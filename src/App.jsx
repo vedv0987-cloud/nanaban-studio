@@ -33,11 +33,11 @@ function doGoogleRedirect() {
 
 // ── Calls the Vercel proxy → Imagen 3 Fast ─────────────────
 async function generateImage(apiKey, prompt, style, negPrompt, aspectRatio) {
-  const fullPrompt = `${style} photography style. ${prompt}. High quality, detailed, professional.`;
+  const fullPrompt = prompt;
   const res = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({
+    body: JSON.stringify({ style,
       prompt: fullPrompt,
       negPrompt,
       aspectRatio,
