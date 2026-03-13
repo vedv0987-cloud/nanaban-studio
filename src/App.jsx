@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 //  → + CREATE CREDENTIALS → OAuth 2.0 Client ID → Web application
 //  → Authorised JS origins: add your app URL
 // ─────────────────────────────────────────────────────────────
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID_HERE";
+const GOOGLE_CLIENT_ID = "253401165308-q00hl4ungj7gsf5nt1iklh0mvs4v73a8.apps.googleusercontent.com";
 
 const MODELS = [
   { id:"nbp1", name:"Nano Banana Pro",   tag:"v1", desc:"Fast, versatile generation for social & marketing",   speed:"~8s",  quality:"High",  color:"#F9AB00" },
