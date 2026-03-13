@@ -4,11 +4,11 @@ const GOOGLE_CLIENT_ID = "253401165308-q00hl4ungj7gsf5nt1iklh0mvs4v73a8.apps.goo
 
 const SIZES = [
   { label:"1:1",  w:1024, h:1024, use:"Instagram Square" },
-  { label:"4:5",  w:896,  h:1120, use:"Instagram Feed"   },
-  { label:"9:16", w:768,  h:1344, use:"Stories / Reels"  },
-  { label:"16:9", w:1344, h:768,  use:"YouTube/LinkedIn" },
-  { label:"3:4",  w:864,  h:1152, use:"Portrait Print"   },
-  { label:"4:3",  w:1152, h:864,  use:"Presentation"     },
+  { label:"4:5",  w:512,  h:640,  use:"Instagram Feed"   },
+  { label:"9:16", w:512,  h:912,  use:"Stories / Reels"  },
+  { label:"16:9", w:912,  h:512,  use:"YouTube/LinkedIn" },
+  { label:"3:4",  w:512,  h:680,  use:"Portrait Print"   },
+  { label:"4:3",  w:680,  h:512,  use:"Presentation"     },
 ];
 
 const MODELS = [
@@ -20,25 +20,17 @@ const MODELS = [
 const STYLES = ["Cinematic","Photorealistic","Luxury Editorial","Architectural Viz","Lifestyle","Product Shot","Golden Hour","Minimal Clean"];
 
 // ── Pollinations.ai — free, no key, no billing ─────────────
-async function generateImage(prompt, negPrompt, style, modelId, width, height) {
-  const full = `${style} style. ${prompt}. Ultra high quality, detailed, sharp focus, professional photography.`;
-  const neg  = negPrompt || "blurry, low quality, watermark, text, ugly, deformed, AI artifacts";
-
+async function generateImage(prompt, style, modelId, width, height) {
+  const full = `${style} style, ${prompt}, high quality, detailed`;
   const params = new URLSearchParams({
-    width:   String(width),
-    height:  String(height),
-    model:   modelId,
-    negative_prompt: neg,
-    nologo:  "true",
-    enhance: "true",
-    seed:    String(Math.floor(Math.random() * 999999)),
+    width:  String(width),
+    height: String(height),
+    model:  modelId,
+    nologo: "true",
   });
-
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(full)}?${params}`;
-
-  // Pollinations returns the image directly — convert to base64 for history storage
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Generation failed (${res.status})`);
+  if (!res.ok) throw new Error(`Generation failed (${res.status}) — try a different prompt`);
   const blob = await res.blob();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -100,7 +92,7 @@ export default function App() {
     setGenerating(true); setError(null); setImgSrc(null);
     const cs = SIZES.find(s=>s.label===size);
     try {
-      const src = await generateImage(prompt, negPrompt, style, model, cs.w, cs.h);
+      const src = await generateImage(prompt, style, model, cs.w, cs.h);
       setImgSrc(src);
       const cm = MODELS.find(m2=>m2.id===model);
       setHistory(prev=>[{
