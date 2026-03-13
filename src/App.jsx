@@ -1,11 +1,5 @@
 import { useState, useEffect } from "react";
 
-// ─────────────────────────────────────────────────────────────
-//  ⚙️  PASTE YOUR GOOGLE OAUTH CLIENT ID BELOW
-//  Get it: https://console.cloud.google.com/apis/credentials
-//  → + CREATE CREDENTIALS → OAuth 2.0 Client ID → Web application
-//  → Authorised JS origins: add your app URL
-// ─────────────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID = "253401165308-q00hl4ungj7gsf5nt1iklh0mvs4v73a8.apps.googleusercontent.com";
 
 const MODELS = [
@@ -37,6 +31,7 @@ async function fetchProfile(token) {
 }
 
 function doGoogleRedirect() {
+  // ✅ FIXED: guard checks for placeholder string, not the real Client ID
   if (GOOGLE_CLIENT_ID === "YOUR_GOOGLE_CLIENT_ID_HERE") {
     alert("⚠️ Paste your Google OAuth Client ID in the GOOGLE_CLIENT_ID constant at the top of the file.\n\nGet it free from: https://console.cloud.google.com/apis/credentials");
     return;
@@ -184,14 +179,11 @@ export default function App() {
     </div>
   );
 
-  // ── LOGIN ───────────────────────────────────────────
   if (!user) return (
     <div style={{ minHeight:"100vh", background:"#060608", display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
       <style>{CSS}</style>
       <div className="orb" style={{ width:580,height:580,top:-180,left:-180,background:"radial-gradient(circle,rgba(249,171,0,.11) 0%,transparent 70%)",animation:"pulse 6s ease-in-out infinite" }} />
       <div className="orb" style={{ width:480,height:480,bottom:-140,right:-140,background:"radial-gradient(circle,rgba(52,168,83,.09) 0%,transparent 70%)",animation:"pulse 8s ease-in-out infinite reverse" }} />
-
-      {/* Floating model badges */}
       <div style={{ position:"absolute",top:72,right:72,background:"rgba(52,168,83,.09)",border:"1px solid rgba(52,168,83,.2)",borderRadius:12,padding:"10px 15px",zIndex:5,fontFamily:"'DM Sans',sans-serif" }}>
         <div style={{ fontSize:11,color:"#34A853",fontWeight:600 }}>✦ Nano Banana Pro 2</div>
         <div style={{ fontSize:10,color:"rgba(255,255,255,.33)",marginTop:2 }}>Ultra Quality · Unlimited</div>
@@ -200,9 +192,7 @@ export default function App() {
         <div style={{ fontSize:11,color:"#F9AB00",fontWeight:600 }}>✦ Nano Banana Pro</div>
         <div style={{ fontSize:10,color:"rgba(255,255,255,.33)",marginTop:2 }}>High Quality · 8 Sizes</div>
       </div>
-
       <div className="card">
-        {/* Logo */}
         <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:36 }}>
           <div className="logo-mark">🍌</div>
           <div>
@@ -210,11 +200,8 @@ export default function App() {
             <div style={{ fontSize:11,color:"rgba(255,255,255,.33)",marginTop:1 }}>Powered by Google Labs</div>
           </div>
         </div>
-
         <div style={{ fontFamily:"'Syne',sans-serif",fontSize:27,fontWeight:800,color:"#fff",lineHeight:1.2,marginBottom:9,letterSpacing:"-0.7px" }}>Create without limits</div>
         <div style={{ fontSize:14,color:"rgba(255,255,255,.38)",marginBottom:30,lineHeight:1.6 }}>Sign in with your Google Pro account to access Nano Banana Pro image generation.</div>
-
-        {/* ── REAL Google OAuth redirect button ── */}
         <button className="gbtn" onClick={() => { setSigningIn(true); doGoogleRedirect(); }} disabled={signingIn}>
           {signingIn ? (<><div className="gs" />Redirecting to Google...</>) : (
             <>
@@ -228,35 +215,11 @@ export default function App() {
             </>
           )}
         </button>
-
-        {/* Setup guide */}
-        <button className="guide-toggle" onClick={() => setShowGuide(!showGuide)}>
-          {showGuide ? "▲ Hide" : "▼ How to connect your Google account — 2 min setup"}
-        </button>
-
-        {showGuide && (
-          <div className="guide-box">
-            <div style={{ fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,color:"#4285F4",marginBottom:13 }}>Google Cloud Setup</div>
-            {[
-              { n:1, c:<>Open <a className="sl" href="https://console.cloud.google.com/apis/credentials" target="_blank">console.cloud.google.com → APIs → Credentials</a></> },
-              { n:2, c:"+ CREATE CREDENTIALS → OAuth 2.0 Client ID" },
-              { n:3, c:"Application type → Web application" },
-              { n:4, c:<>Authorised JS origins → add <span className="sc">http://localhost:3000</span> or your live domain</> },
-              { n:5, c:<>Copy Client ID → replace <span className="sc">YOUR_GOOGLE_CLIENT_ID_HERE</span> in this file</> },
-            ].map(s => (
-              <div key={s.n} className="step"><div className="snum">{s.n}</div><div className="stxt">{s.c}</div></div>
-            ))}
-            <div style={{ fontSize:11,color:"rgba(66,133,244,.65)",marginTop:4,fontFamily:"'DM Sans',sans-serif" }}>OAuth is completely free — no billing needed for auth only.</div>
-          </div>
-        )}
-
-        {/* Feature chips */}
         <div style={{ display:"flex",gap:7,flexWrap:"wrap",marginTop:22 }}>
           {["Nano Banana Pro","Nano Banana Pro 2","8 Aspect Ratios","Unlimited Gen","Style Presets"].map(c => (
             <span key={c} style={{ padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:500,background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.07)",color:"rgba(255,255,255,.37)" }}>{c}</span>
           ))}
         </div>
-
         <div style={{ fontSize:11,color:"rgba(255,255,255,.2)",textAlign:"center",marginTop:20,lineHeight:1.5 }}>
           By continuing you agree to Google's Terms of Service.<br/>Your Google Pro plan grants unlimited generation access.
         </div>
@@ -264,23 +227,19 @@ export default function App() {
     </div>
   );
 
-  // ── MAIN APP ─────────────────────────────────────────
   return (
     <div style={{ minHeight:"100vh",background:"#07080A",fontFamily:"'DM Sans',sans-serif",display:"flex",flexDirection:"column" }}>
       <style>{CSS}</style>
-
       <nav className="navbar">
         <div style={{ display:"flex",alignItems:"center",gap:9 }}>
           <div className="logo-mark">🍌</div>
           <div style={{ fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:"#fff",letterSpacing:"-0.3px" }}>NanaBan Studio</div>
         </div>
-
         <div className="ntabs">
           {[["generate","✦ Generate"],["history","◌ History"]].map(([id,lbl]) => (
             <button key={id} className={`ntab ${tab===id?"on":""}`} onClick={()=>setTab(id)}>{lbl}</button>
           ))}
         </div>
-
         <div style={{ display:"flex",alignItems:"center" }}>
           <div className="pill">
             {user.picture
@@ -295,7 +254,6 @@ export default function App() {
           <button className="signout" onClick={()=>setUser(null)}>Sign out</button>
         </div>
       </nav>
-
       {tab==="history" ? (
         <div className="hpanel">
           <div style={{ marginBottom:18 }}>
@@ -321,9 +279,7 @@ export default function App() {
         </div>
       ) : (
         <div style={{ display:"flex",flex:1,overflow:"hidden" }}>
-          {/* Left panel */}
           <div className="lpanel">
-            {/* Model */}
             <div>
               <div className="slbl">Model</div>
               {MODELS.map(m => (
@@ -341,8 +297,6 @@ export default function App() {
                 </div>
               ))}
             </div>
-
-            {/* Size */}
             <div>
               <div className="slbl">Aspect Ratio</div>
               <div className="szgrid">
@@ -355,16 +309,12 @@ export default function App() {
                 ))}
               </div>
             </div>
-
-            {/* Style */}
             <div>
               <div className="slbl">Style Preset</div>
               <div className="schips">
                 {STYLES.map(s => <div key={s} className={`schip ${style===s?"on":""}`} onClick={()=>setStyle(s)}>{s}</div>)}
               </div>
             </div>
-
-            {/* Prompts */}
             <div>
               <div className="slbl">Prompt</div>
               <textarea className="ptxt" rows={5} placeholder="Describe your image — scene, lighting, mood, cultural context, camera angle..." value={prompt} onChange={e=>setPrompt(e.target.value)} />
@@ -373,8 +323,6 @@ export default function App() {
               <div className="slbl">Negative Prompt</div>
               <textarea className="ptxt" rows={2} placeholder="No AI artifacts, no plastic skin, no Western defaults..." value={negPrompt} onChange={e=>setNegPrompt(e.target.value)} />
             </div>
-
-            {/* Advanced */}
             <div>
               <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer" }} onClick={()=>setShowAdv(!showAdv)}>
                 <div className="slbl" style={{ marginBottom:0 }}>Advanced</div>
@@ -398,13 +346,10 @@ export default function App() {
                 </div>
               )}
             </div>
-
             <button className={`genbtn ${generating?"loading":""}`} onClick={handleGenerate} disabled={generating||!prompt.trim()}>
               {generating ? <><div className="spinner" />Generating with {cm.name}...</> : <>✦ Generate Image</>}
             </button>
           </div>
-
-          {/* Canvas */}
           <div style={{ flex:1,display:"flex",flexDirection:"column" }}>
             <div className="canvas">
               <div className="imgbox" style={{ width:dw,height:dh }}>
@@ -433,7 +378,6 @@ export default function App() {
                 )}
               </div>
             </div>
-
             <div className="metabar">
               <div style={{ display:"flex",gap:18 }}>
                 {[["Model",cm.name],["Size",`${cs.label} · ${cs.w}×${cs.h}`],["Style",style],["Seed",seed]].map(([k,v])=>(
